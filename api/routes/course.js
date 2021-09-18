@@ -1,0 +1,126 @@
+const express = require("express");
+const router = express.Router();
+const { asyncHandler } = require("../middleware/async-handler")
+const Course = require("../models").Course;
+const User = require("../models").User
+const { authenticateUser } = require("../middleware/auth-user")
+
+/**
+ * @desc    Returns a list of courses including the user that owns each course.
+ * @route   GET /api/course
+ * @access  PUBLIC
+ */
+router.get("/courses", asyncHandler(async (request, response) => {
+    const courses = await Course.findAll({
+        attributes: {
+            exclude: ["createdAt", "updatedAt"]
+        }
+    })
+    response.status(200).json({ courses })
+}))
+
+/**
+ * @desc    Returns a course including the user that owns each course.
+ * @route   GET /api/courses/:id
+ * @access  PUBLIC
+ */
+router.get("/courses/:id", asyncHandler(async (request, response) => {
+    // Excludes createdAt & updatedAt
+    const course = await Course.findByPk(request.params.id, {
+        attributes: {
+            exclude: ['password', 'createdAt', 'updatedAt']
+        },
+        include: [
+            {
+                model: User,
+                as: 'User',
+                attributes: {
+                    exclude: ['password', 'createdAt', 'updatedAt']
+                },
+            }
+        ]
+    });
+    response.status(200).json({ course })
+}))
+
+/**
+ * @desc    Creates a course
+ * @route   POST /api/courses/
+ * @access  PRIVATE
+ */
+router.post("/courses", authenticateUser, asyncHandler(async (request, response) => {
+    try {
+        const authenticatedUser = request.currentUser;
+        const { title, description, estimatedTime, materialsNeeded } = request.body
+        if (authenticatedUser) {
+            const createdCourse = await Course.create({
+                userId: authenticatedUser.dataValues.id,
+                title: title,
+                description: description,
+                estimatedTime: estimatedTime,
+                materialsNeeded: materialsNeeded
+
+            })
+            response.status(201).location(`/api/course/${createdCourse.dataValues.id}`).end();
+        }
+    } catch (error) {
+        if (error.name === 'SequelizeValidationError' || error.name === 'SequelizeUniqueConstraintError') {
+            const errors = error.errors.map(error => error.message)
+            response.status(400).json({ errors })
+        } else {
+            throw error;
+        }
+    }
+}))
+
+
+/**
+ * @desc    Allow update only if the user is the creator of the course.
+ * @route   PUT /api/courses/:id
+ * @access  PRIVATE
+ */
+router.put("/courses/:id", authenticateUser, asyncHandler(async (request, response) => {
+    try {
+        const creator = request.currentUser
+        // Find the course to update using the primary key method.
+        const course = await Course.findByPk(request.params.id)
+        console.log("The Course:", course)
+        if (creator.dataValues.id === course.dataValues.userId) {
+            await course.update(request.body)
+            response.status(204).json({ message: "Editing course complete." });
+        } else {
+            response.status(403).json({ message: "You're not the creator of this course." });
+        }
+        if (!request.body.title && !request.body.description) {
+            response.status(400).json({ message: "Please enter a title and description." })
+        }
+    } catch (error) {
+        if (error.name === 'SequelizeValidationError' || error.name === 'SequelizeUniqueConstraintError') {
+            const errors = error.errors.map(error => error.message)
+            response.status(400).json({ errors })
+        } else {
+            throw error;
+        }
+    }
+}))
+
+
+/**
+ * @desc    Allow delete only if the user is the creator of hte course.
+ * @route   DELETE /api/courses/:id
+ * @access  PRIVATE
+ */
+router.delete("/courses/:id", authenticateUser, asyncHandler(async (request, response) => {
+    const creator = request.currentUser
+    // Find the course to update using the primary key method.
+    const course = await Course.findByPk(request.params.id)
+
+    if (course.dataValues.userId === creator.dataValues.id) {
+        course.destroy();
+        response.status(204).json({ message: "You're the creator of this course." })
+    } else {
+        response.status(403).json({ message: "You're not the creator of this course." })
+    }
+}))
+
+module.exports = router
