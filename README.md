@@ -9,7 +9,7 @@ Please run the following line of codes in your terminal to get started. <br/>
 <h2>Tools</h2>
 <ul>
 <li>Postman</li>
-<li>Sequelize, sqlite3 & SQL CLI</li>
+<li>Sequelize, mysql & SQL CLI</li>
 <li>Bcryptjs to hash passwords</li>
 <li>ExpressJS</li>
 </ul>
